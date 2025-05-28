@@ -1,0 +1,72 @@
+MCP Server Documentation
+Structure
+Your MCP server consists of two main components:
+Go Vector Search Server (mcpserver/tools):
+Provides backend vector search, code embedding, and repository indexing.
+Node.js MCP Agent Chat Server (mcpserver/mcp-agent-chat):
+Exposes an HTTP MCP interface, connects to the Go server, and provides chat and search endpoints.
+1. Go Vector Search Server
+Location: mcpserver/tools
+Features
+Handles code embedding and vector storage (Pinecone, OpenAI)
+Processes semantic search queries over code repositories
+Returns relevant code snippets based on vector similarity
+Supports repository indexing and chat endpoints
+Setup
+Install Go dependencies:
+Apply
+Run
+tidy
+Configure environment variables:
+PINECONE_API_KEY, PINECONE_ENVIRONMENT, PINECONE_INDEX_NAME, PINECONE_HOST
+OPENAI_API_KEY
+SERVER_PORT (default: 8081)
+DB_CONNECTION (if using Postgres)
+Start the server:
+Apply
+Run
+go
+Main Endpoints
+POST /vector-search — Vector search in a repository
+POST /index-repository — Index a repository for search
+POST /chat — Chat endpoint with code context
+POST /github-config — Configure GitHub access
+GET /health — Health check
+POST /cursor-connection — Cursor-based actions
+POST /mcp-registration — Server info and capabilities
+2. Node.js MCP Agent Chat Server
+Location: mcpserver/mcp-agent-chat
+Features
+Exposes MCP protocol endpoints for chat and code search
+Integrates with the Go server for vector search and indexing
+Provides a simple interface for AI tools (like Cursor) to connect
+Setup
+Install dependencies:
+Apply
+Run
+install
+Start the integration server (connects to Go server):
+Apply
+Run
+integration
+MCP server will run on http://localhost:3000 by default
+Configuration
+GO_SERVER_URL: URL of the Go vector search server (default: http://localhost:8081)
+MCP_PORT: Port for the MCP server (default: 3000)
+Main Tools/Endpoints
+chat: Process a chat message with repository context
+Parameters: message (required), repository (optional), context (optional)
+vectorSearch: Search for code in a repository
+Parameters: query (required), repository (required), limit (optional)
+Integration
+Start the Go server first.
+Then start the Node.js MCP server.
+Configure your AI tool (e.g., Cursor) to connect to http://localhost:3000.
+Example Usage
+Vector Search Request:
+Apply
+}
+Chat Request:
+Apply
+}
+If you need detailed documentation for a specific file, endpoint, or internal logic, let me know!

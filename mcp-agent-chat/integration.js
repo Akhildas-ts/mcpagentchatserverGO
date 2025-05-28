@@ -4,10 +4,23 @@ import { z } from 'zod';
 import axios from 'axios';
 import 'dotenv/config';
 import express from 'express';
-import fetch from 'node-fetch';  // If you need fetch
+import fetch from 'node-fetch';
+import fs from 'fs';
+
+// Load configuration
+let config;
+try {
+  const configFile = fs.readFileSync('./config.json', 'utf8');
+  config = JSON.parse(configFile);
+} catch (error) {
+  config = {
+    autoStart: false,
+    port: process.env.MCP_PORT || 3000,
+    goServerUrl: process.env.GO_SERVER_URL || 'http://localhost:8081'
+  };
+}
 
 const app = express();
-const port = process.env.MCP_PORT || 3000;
 
 // Debug logging
 process.on('message', (message) => {
@@ -21,21 +34,21 @@ const server = new McpServer({
 });
 
 // Configuration for your Go server
-const config = {
-  GO_SERVER_URL: process.env.GO_SERVER_URL || 'http://localhost:8081',
+const serverConfig = {
+  GO_SERVER_URL: config.goServerUrl,
   MCP_SECRET_TOKEN: process.env.MCP_SECRET_TOKEN
 };
 
 console.error('DEBUG - CONFIG:', {
-  GO_SERVER_URL: config.GO_SERVER_URL,
-  MCP_SECRET_TOKEN: config.MCP_SECRET_TOKEN ? `${config.MCP_SECRET_TOKEN.slice(0, 5)}...` : 'not set'
+  GO_SERVER_URL: serverConfig.GO_SERVER_URL,
+  MCP_SECRET_TOKEN: serverConfig.MCP_SECRET_TOKEN ? `${serverConfig.MCP_SECRET_TOKEN.slice(0, 5)}...` : 'not set'
 });
 
 // Add authentication header to requests if token is available
 const axiosConfig = {};
-if (config.MCP_SECRET_TOKEN) {
+if (serverConfig.MCP_SECRET_TOKEN) {
   axiosConfig.headers = {
-    'X-MCP-Token': config.MCP_SECRET_TOKEN
+    'X-MCP-Token': serverConfig.MCP_SECRET_TOKEN
   };
 }
 
@@ -47,7 +60,7 @@ async function processChat(message, repository = '', context = {}) {
     console.error(`DEBUG - Processing chat: "${message}" for repo: ${repository}`);
     
     // First, search for relevant code using the Go server's vector search
-    const searchResponse = await axios.post(`${config.GO_SERVER_URL}/vector-search`, {
+    const searchResponse = await axios.post(`${serverConfig.GO_SERVER_URL}/vector-search`, {
       query: message,
       repository: repository,
       limit: 5
@@ -126,7 +139,7 @@ server.tool(
       console.error('DEBUG - Vector search tool called with:', { query, repository, limit });
       
       // Call the Go server's vector search endpoint
-      const response = await axios.post(`${config.GO_SERVER_URL}/vector-search`, {
+      const response = await axios.post(`${serverConfig.GO_SERVER_URL}/vector-search`, {
         query,
         repository,
         limit
@@ -178,7 +191,7 @@ server.tool(
       console.error(`DEBUG - Indexing repository: ${repoUrl}, branch: ${branch}`);
       
       // Call the Go server's repository indexing endpoint
-      const response = await axios.post(`${config.GO_SERVER_URL}/index-repository`, {
+      const response = await axios.post(`${serverConfig.GO_SERVER_URL}/index-repository`, {
         repoUrl,
         branch
       }, axiosConfig);
@@ -216,18 +229,30 @@ server.tool(
   }
 );
 
-// Start the server with stdio transport
+// Only start the HTTP server if autoStart is true
+if (config.autoStart) {
+  app.listen(config.port, () => {
+    console.log(`MCP server listening on port ${config.port}`);
+  });
+}
+
+// Start the stdio server
+console.log('Agent Chat MCP server running on stdio');
 const transport = new StdioServerTransport();
-
-// Log connection information
-console.error('Agent Chat MCP server running on stdio');
-console.error(`Connected to Go server at ${config.GO_SERVER_URL}`);
-
-// Connect the server
 server.connect(transport).catch((error) => {
-  console.error('[MCP Error]', error);
+  console.error('Failed to connect MCP server:', error);
   process.exit(1);
 });
+
+// Connect to Go server
+try {
+  const response = await axios.get(`${serverConfig.GO_SERVER_URL}/health`, axiosConfig);
+  if (response.data.success) {
+    console.log(`Connected to Go server at ${serverConfig.GO_SERVER_URL}`);
+  }
+} catch (error) {
+  console.error(`Failed to connect to Go server: ${error.message}`);
+}
 
 // Enable JSON parsing
 app.use(express.json());
@@ -239,7 +264,7 @@ app.post('/mcp', async (req, res) => {
 
     // Verify token
     const authHeader = req.headers.authorization;
-    if (!authHeader || `Bearer ${config.MCP_SECRET_TOKEN}` !== authHeader) {
+    if (!authHeader || `Bearer ${serverConfig.MCP_SECRET_TOKEN}` !== authHeader) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -272,7 +297,7 @@ app.post('/mcp', async (req, res) => {
     // Choose the correct endpoint based on the tool
     const endpoint = req.body.tool === 'indexRepository' ? '/index-repository' : '/vector-search';
     
-    const response = await fetch(`${config.GO_SERVER_URL}${endpoint}`, {
+    const response = await fetch(`${serverConfig.GO_SERVER_URL}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -302,10 +327,4 @@ app.post('/mcp', async (req, res) => {
       success: false
     });
   }
-});
-
-// Start HTTP server
-app.listen(port, () => {
-  console.log(`MCP server listening on port ${port}`);
-  console.log(`Connected to Go server at ${config.GO_SERVER_URL}`);
 }); 

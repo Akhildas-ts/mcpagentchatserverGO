@@ -4,7 +4,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node integration.js",
     "test": "node client.js",
     "integration": "node integration.js",
     "cursor-config": "node cursor-config.js",

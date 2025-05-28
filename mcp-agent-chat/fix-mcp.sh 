@@ -1,0 +1,548 @@
+#!/bin/bash
+# fix-mcp.sh - Script to fix the MCP integration
+
+echo "==============================================="
+echo "MCP Server Fix Script"
+echo "==============================================="
+
+# Current directory
+CURRENT_DIR=$(pwd)
+
+# Backup existing files
+echo "1. Backing up existing files..."
+mkdir -p backups
+
+if [ -f "index.js" ]; then
+  cp index.js backups/index.js.bak.$(date +"%Y%m%d%H%M%S")
+  echo "   Backed up index.js"
+fi
+
+if [ -f "package.json" ]; then
+  cp package.json backups/package.json.bak.$(date +"%Y%m%d%H%M%S")
+  echo "   Backed up package.json"
+fi
+
+# Install required packages
+echo "2. Installing required packages..."
+npm install --save axios express socket.io ws
+
+# Create the new index.js file
+echo "3. Creating new index.js file..."
+cat > index.js << 'EOL'
+#!/usr/bin/env node
+
+/**
+ * Direct STDIO Implementation for MCP
+ * - This avoids SDK limitations and directly implements the protocol
+ * - Immediately provides server info on startup
+ * - Responds to all standard MCP requests
+ * - Forwards requests to the Go backend when needed
+ */
+
+const fs = require('fs');
+const axios = require('axios');
+const path = require('path');
+
+// Configuration
+const config = {
+  GO_SERVER_URL: process.env.GO_SERVER_URL || 'http://localhost:8081',
+  DEBUG: process.env.DEBUG || false,
+  LOG_FILE: path.join(__dirname, 'mcp-debug.log')
+};
+
+// Set up logging
+function log(message, data = null) {
+  try {
+    const timestamp = new Date().toISOString();
+    let logMessage = `[${timestamp}] ${message}\n`;
+    
+    if (data) {
+      if (typeof data === 'object') {
+        logMessage += JSON.stringify(data, null, 2) + '\n';
+      } else {
+        logMessage += `${data}\n`;
+      }
+    }
+    
+    fs.appendFileSync(config.LOG_FILE, logMessage);
+    
+    // Also log to stderr if debug is enabled
+    if (config.DEBUG) {
+      console.error(message);
+      if (data) console.error(data);
+    }
+  } catch (error) {
+    // Silently fail if logging fails - don't break the server
+    console.error('Logging error:', error.message);
+  }
+}
+
+// Initialize log file
+try {
+  log('MCP STDIO server starting');
+  log(`Process ID: ${process.pid}`);
+  log(`Working directory: ${process.cwd()}`);
+  log(`Configured Go server: ${config.GO_SERVER_URL}`);
+} catch (error) {
+  console.error('Error initializing log file:', error.message);
+}
+
+// Server information - immediately available
+const serverInfo = {
+  name: "MCP Agent Chat",
+  version: "1.0.0", 
+  description: "Chat agent with vector search capabilities",
+  vendor: {
+    name: "Your Organization"
+  },
+  capabilities: {
+    chat: true,
+    vectorSearch: true,
+    indexRepository: true
+  }
+};
+
+// Define offerings
+const offerings = {
+  tools: [
+    {
+      id: "chat",
+      name: "Chat",
+      description: "Process a chat message with repository context",
+      parameters: {
+        type: "object",
+        required: ["message"],
+        properties: {
+          message: { type: "string", description: "The message to process" },
+          repository: { type: "string", description: "Repository to use for context" },
+          context: { type: "array", items: { type: "string" }, description: "Additional context" }
+        }
+      }
+    },
+    {
+      id: "vectorSearch",
+      name: "Vector Search",
+      description: "Search for code in a repository",
+      parameters: {
+        type: "object",
+        required: ["query", "repository"],
+        properties: {
+          query: { type: "string", description: "The search query" },
+          repository: { type: "string", description: "Repository to search in" },
+          limit: { type: "number", description: "Maximum results to return" }
+        }
+      }
+    },
+    {
+      id: "indexRepository",
+      name: "Index Repository",
+      description: "Index a repository for search",
+      parameters: {
+        type: "object",
+        required: ["repository"],
+        properties: {
+          repository: { type: "string", description: "Repository URL to index" },
+          branch: { type: "string", description: "Branch to index" }
+        }
+      }
+    }
+  ],
+  resources: [],
+  resourceTemplates: []
+};
+
+// Send JSONRPC message to stdout
+function sendJsonRpc(message) {
+  try {
+    const jsonString = JSON.stringify(message);
+    log('SENDING', message);
+    process.stdout.write(jsonString + '\n');
+  } catch (error) {
+    log('ERROR SENDING', error.message);
+  }
+}
+
+// Send server info notification immediately
+log('Sending server info notification');
+sendJsonRpc({
+  jsonrpc: "2.0",
+  method: "serverInfo",
+  params: { serverInfo }
+});
+
+// Send JSON-RPC response
+function sendResponse(result, id) {
+  sendJsonRpc({
+    jsonrpc: '2.0',
+    result,
+    id
+  });
+}
+
+// Send JSON-RPC error
+function sendError(code, message, id) {
+  sendJsonRpc({
+    jsonrpc: '2.0',
+    error: {
+      code,
+      message
+    },
+    id
+  });
+}
+
+// Handle chat request
+async function handleChat(params, id) {
+  try {
+    log('Handling chat request', params);
+    const response = await axios.post(`${config.GO_SERVER_URL}/chat`, params);
+    sendResponse(response.data, id);
+  } catch (error) {
+    log('Chat request error', error.message);
+    sendError(-32000, `Chat request failed: ${error.message}`, id);
+  }
+}
+
+// Handle vector search request
+async function handleVectorSearch(params, id) {
+  try {
+    log('Handling vector search request', params);
+    const response = await axios.post(`${config.GO_SERVER_URL}/vector-search`, params);
+    sendResponse(response.data, id);
+  } catch (error) {
+    log('Vector search error', error.message);
+    sendError(-32000, `Vector search failed: ${error.message}`, id);
+  }
+}
+
+// Handle repository indexing request
+async function handleIndexRepository(params, id) {
+  try {
+    log('Handling index repository request', params);
+    const response = await axios.post(`${config.GO_SERVER_URL}/index-repository`, params);
+    sendResponse(response.data, id);
+  } catch (error) {
+    log('Index repository error', error.message);
+    sendError(-32000, `Index repository failed: ${error.message}`, id);
+  }
+}
+
+// Process incoming requests
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  const input = chunk.toString();
+  log('RECEIVED', input);
+  
+  try {
+    // Split input by newlines in case multiple requests come at once
+    input.split('\n').forEach(line => {
+      if (!line.trim()) return;
+      
+      const request = JSON.parse(line);
+      log('Parsed request', request);
+      
+      if (request.jsonrpc !== '2.0') {
+        log('Invalid JSON-RPC version', request);
+        sendError(-32600, 'Invalid JSON-RPC version', request.id);
+        return;
+      }
+      
+      // Handle different methods
+      switch (request.method) {
+        case 'getServerInfo':
+          log('Handling getServerInfo request');
+          sendResponse({ serverInfo }, request.id);
+          break;
+          
+        case 'listOfferings':
+          log('Handling listOfferings request');
+          sendResponse(offerings, request.id);
+          break;
+          
+        case 'chat':
+        case 'invokeChat':
+          handleChat(request.params, request.id);
+          break;
+          
+        case 'vectorSearch':
+        case 'invokeVectorSearch':
+          handleVectorSearch(request.params, request.id);
+          break;
+          
+        case 'indexRepository':
+        case 'invokeIndexRepository':
+          handleIndexRepository(request.params, request.id);
+          break;
+          
+        default:
+          log('Unknown method', request.method);
+          sendError(-32601, `Method not found: ${request.method}`, request.id);
+      }
+    });
+  } catch (error) {
+    log('Error processing request', error.message);
+    try {
+      sendError(-32700, 'Parse error', null);
+    } catch (e) {
+      log('Error sending error response', e.message);
+    }
+  }
+});
+
+// Intercept uncaught exceptions
+process.on('uncaughtException', (error) => {
+  log('UNCAUGHT EXCEPTION', error.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  log('UNHANDLED REJECTION', { reason, promise });
+});
+
+// Handle process signals
+process.on('SIGINT', () => {
+  log('Received SIGINT, shutting down');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  log('Received SIGTERM, shutting down');
+  process.exit(0);
+});
+
+// Create keep-alive to prevent premature termination
+const keepAliveInterval = setInterval(() => {
+  log('Keep-alive heartbeat');
+}, 30000);
+
+// Clean up on exit
+process.on('exit', () => {
+  log('Process exit, clearing interval');
+  clearInterval(keepAliveInterval);
+});
+
+log('MCP STDIO server running');
+EOL
+
+# Make it executable
+chmod +x index.js
+echo "   Created index.js and made it executable"
+
+# Create the new package.json file
+echo "4. Creating new package.json file..."
+cat > package.json << 'EOL'
+{
+  "name": "mcp-agent-chat",
+  "version": "1.0.0",
+  "description": "MCP Agent Chat Server",
+  "main": "index.js",
+  "bin": {
+    "mcp-agent-chat": "./index.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "mcp": "node index.js",
+    "debug": "DEBUG=true node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "ws": "^8.14.2"
+  }
+}
+EOL
+echo "   Created package.json"
+
+# Create test script
+echo "5. Creating test script..."
+cat > test-mcp.js << 'EOL'
+const { spawn } = require('child_process');
+const path = require('path');
+
+console.log('Testing MCP STDIO communication...');
+
+// Start the MCP handler as a child process
+const child = spawn('node', ['index.js'], {
+  stdio: ['pipe', 'pipe', 'pipe'],
+  env: {
+    ...process.env,
+    DEBUG: 'true'
+  }
+});
+
+// Track if we've seen the server info notification
+let serverInfoReceived = false;
+
+// Handle data from the child process
+child.stdout.on('data', (data) => {
+  const message = data.toString().trim();
+  console.log('Received from MCP server:');
+  console.log(message);
+  
+  try {
+    // For each line in the output
+    const lines = message.split('\n').filter(Boolean);
+    for (const line of lines) {
+      const parsed = JSON.parse(line);
+      
+      // If we got server info
+      if (parsed.method === 'serverInfo') {
+        console.log('\n✅ Successfully received server info notification!');
+        serverInfoReceived = true;
+        
+        // Send a listOfferings request after a short delay
+        setTimeout(() => {
+          console.log('\nSending listOfferings request...');
+          sendRequest('listOfferings', {}, 1);
+        }, 500);
+      }
+      
+      // If we got offerings
+      if (parsed.id === 1 && parsed.result && parsed.result.tools) {
+        console.log('\n✅ Successfully received offerings response!');
+        console.log(`Found ${parsed.result.tools.length} tools`);
+        
+        // Send a test chat message
+        setTimeout(() => {
+          console.log('\nSending test chat message...');
+          sendRequest('chat', {
+            message: 'Test message',
+            repository: 'test/repo'
+          }, 2);
+        }, 500);
+      }
+      
+      // If we got chat response
+      if (parsed.id === 2) {
+        console.log('\n✅ Successfully received chat response!');
+        console.log('\nTest successful! Your MCP STDIO communication is working!');
+        
+        // Exit after all tests
+        setTimeout(() => {
+          console.log('\nAll tests completed successfully. Exiting...');
+          child.kill();
+          process.exit(0);
+        }, 1000);
+      }
+    }
+  } catch (err) {
+    console.error('Error parsing message:', err.message);
+  }
+});
+
+// Log any errors
+child.stderr.on('data', (data) => {
+  console.error(`MCP Server stderr: ${data.toString()}`);
+});
+
+// Handle process exit
+child.on('close', (code) => {
+  console.log(`MCP process exited with code ${code}`);
+  if (!serverInfoReceived) {
+    console.error('❌ ERROR: Did not receive server info notification!');
+  }
+  process.exit(code);
+});
+
+// Handle errors
+child.on('error', (err) => {
+  console.error('Error spawning MCP process:', err.message);
+  process.exit(1);
+});
+
+// Helper to send requests
+function sendRequest(method, params, id) {
+  const request = {
+    jsonrpc: '2.0',
+    method,
+    params,
+    id
+  };
+  
+  console.log(`Sending: ${JSON.stringify(request)}`);
+  child.stdin.write(JSON.stringify(request) + '\n');
+}
+
+// Exit after timeout if tests don't complete
+setTimeout(() => {
+  console.error('❌ Tests timed out after 10 seconds');
+  child.kill();
+  process.exit(1);
+}, 10000);
+EOL
+echo "   Created test-mcp.js"
+
+# Update Cursor configuration
+if [ -f "$HOME/.cursor/mcp.json" ]; then
+  echo "6. Updating Cursor MCP configuration..."
+  
+  # Create a temporary file with the new configuration
+  TMP_FILE=$(mktemp)
+  
+  cat > $TMP_FILE << 'EOL'
+{
+  "mcpServers": {
+    "agentchatmcp": {
+      "command": "node",
+      "args": [
+        "index.js"
+      ],
+      "cwd": "CURRENT_DIR_PLACEHOLDER",
+      "env": {
+        "GO_SERVER_URL": "http://localhost:8081",
+        "MCP_SECRET_TOKEN": "1823695f5eee57db3fb25d4b3fcb20b7e812174d0dbc96d2f5eb2f3b360c5e0b",
+        "DEBUG": "true"
+      }
+    }
+  }
+}
+EOL
+  
+  # Replace placeholder with actual directory
+  sed -i.bak "s|CURRENT_DIR_PLACEHOLDER|$CURRENT_DIR|g" $TMP_FILE
+  
+  # Backup current configuration
+  cp "$HOME/.cursor/mcp.json" "$HOME/.cursor/mcp.json.bak.$(date +"%Y%m%d%H%M%S")"
+  
+  # Copy new configuration
+  cp $TMP_FILE "$HOME/.cursor/mcp.json"
+  
+  # Clean up
+  rm $TMP_FILE
+  
+  echo "   Updated Cursor MCP configuration"
+else
+  echo "6. Cursor MCP configuration not found at $HOME/.cursor/mcp.json"
+  echo "   Please update it manually using this template:"
+  echo
+  echo '{
+  "mcpServers": {
+    "agentchatmcp": {
+      "command": "node",
+      "args": [
+        "index.js"
+      ],
+      "cwd": "'$CURRENT_DIR'",
+      "env": {
+        "GO_SERVER_URL": "http://localhost:8081",
+        "MCP_SECRET_TOKEN": "1823695f5eee57db3fb25d4b3fcb20b7e812174d0dbc96d2f5eb2f3b360c5e0b",
+        "DEBUG": "true"
+      }
+    }
+  }
+}'
+fi
+
+echo
+echo "==============================================="
+echo "MCP Server Fix Complete!"
+echo "==============================================="
+echo
+echo "Next steps:"
+echo "1. Test your MCP server with: node test-mcp.js"
+echo "2. Make sure your Go server is running at: ${config.GO_SERVER_URL}"
+echo "3. Restart Cursor to use the updated MCP configuration"
+echo
+echo "If you encounter any issues, check the log file at:"
+echo "   $(pwd)/mcp-debug.log"
+echo

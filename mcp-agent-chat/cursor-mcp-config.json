@@ -1,0 +1,17 @@
+{
+  "agentchatmcp": {
+    "command": "node",
+    "args": [
+      "integration.js"
+    ],
+    "cwd": "/Users/arundas/Desktop/mcpserver/mcp-agent-chat",
+    "env": {
+      "GO_SERVER_URL": "http://localhost:8081",
+      "MCP_SECRET_TOKEN": "1823695f5eee57db3fb25d4b3fcb20b7e812174d0dbc96d2f5eb2f3b360c5e0b",
+      "MCP_PORT": "3000",
+      "NODE_ENV": "development",
+      "DEBUG": "mcp:*",
+      "KEEP_ALIVE": "true"
+    }
+  }
+} 

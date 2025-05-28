@@ -12,10 +12,16 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+// OpenAIClientInterface defines the interface for OpenAI client operations
+type OpenAIClientInterface interface {
+	CreateEmbeddings(ctx context.Context, request openai.EmbeddingRequestConverter) (openai.EmbeddingResponse, error)
+	CreateChatCompletion(ctx context.Context, request openai.ChatCompletionRequest) (openai.ChatCompletionResponse, error)
+}
+
 // RepoIndexer handles the cloning and indexing of GitHub repositories
 type RepoIndexer struct {
-	vectorStore  *VectorStore
-	openAIClient *openai.Client
+	vectorStore  VectorStoreInterface
+	openAIClient OpenAIClientInterface
 }
 
 // NewRepoIndexer creates a new repository indexer
@@ -279,6 +285,8 @@ func splitIntoChunks(content string, chunkSize int) []string {
 	if currentSize > 0 {
 		chunks = append(chunks, currentChunk)
 	}
+
+	fmt.Printf("Split into %d chunks\n", len(chunks))
 
 	return chunks
 }

@@ -1,0 +1,56 @@
+{
+  "mcpServers": {
+    "sequential thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@smithery-ai/server-sequential-thinking",
+        "--config",
+        "\"{}\""
+      ]
+    },
+    "githubmcp": {
+      "command": "bash",
+      "args": [
+        "/Users/akhildas/Desktop/techjays/build-with-ai-github.com/build-with-ai-github/script.sh"
+      ]
+    },
+    "gdrive": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gdrive"
+      ],
+      "env": {
+        "GDRIVE_OAUTH_PATH": "",
+        "GDRIVE_CREDENTIALS_PATH": "/Users/akhildas/Desktop/mcp/servers/.gdrive-server-credentials.json"
+      }
+    },
+    "akhilgithubmcp": {
+      "command": "bash",
+      "args": [
+        "/Users/akhildas/Desktop/techjays/auth/git.sh"
+      ]
+    },
+    "agentchatmcp": {
+      "command": "node",
+      "args": [
+        "integration.js"
+      ],
+      "cwd": "/Users/akhildas/Desktop/techjays/build-with-ai-github.com/mcpserver/mcp-agent-chat",
+      "env": {
+        "GO_SERVER_URL": "http://localhost:8081",
+        "MCP_SECRET_TOKEN": "1823695f5eee57db3fb25d4b3fcb20b7e812174d0dbc96d2f5eb2f3b360c5e0b"
+      }
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer@latest"
+      ]
+    }
+  }
+} 
