@@ -3,11 +3,10 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 
 	"mcpserver/internal/config"
-	"mcpserver/internal/handlers"
-	"mcpserver/internal/services"
+	"mcpserver/internal/handler"
+	"mcpserver/internal/service"
 	"mcpserver/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -20,16 +19,16 @@ type Server struct {
 }
 
 type Services struct {
-	VectorSearch *services.VectorSearchService
-	RepoIndexer  *services.RepoIndexerService
-	MCPServer    *services.MCPServerService
+	VectorSearch *service.VectorSearchService
+	RepoIndexer  *service.RepoIndexerService
+	MCPServer    *service.MCPServerService
 }
 
 type Handlers struct {
-	Health       *handlers.HealthHandler
-	VectorSearch *handlers.VectorSearchHandler
-	RepoIndexer  *handlers.RepoIndexerHandler
-	MCP          *handlers.MCPHandler
+	Health       *handler.HealthHandler
+	VectorSearch *handler.VectorSearchHandler
+	RepoIndexer  *handler.RepoIndexerHandler
+	MCP          *handler.MCPHandler
 }
 
 func main() {
@@ -73,17 +72,17 @@ func initializeServer() (*Server, error) {
 
 	// Initialize services
 	services := &Services{
-		VectorSearch: services.NewVectorSearchService(pineconeStore, openaiClient),
-		RepoIndexer:  services.NewRepoIndexerService(pineconeStore, openaiClient),
-		MCPServer:    services.NewMCPServerService(pineconeStore, openaiClient),
+		VectorSearch: service.NewVectorSearchService(pineconeStore, openaiClient),
+		RepoIndexer:  service.NewRepoIndexerService(pineconeStore, openaiClient),
+		MCPServer:    service.NewMCPServerService(pineconeStore, openaiClient),
 	}
 
 	// Initialize handlers
 	handlers := &Handlers{
-		Health:       handlers.NewHealthHandler(),
-		VectorSearch: handlers.NewVectorSearchHandler(services.VectorSearch),
-		RepoIndexer:  handlers.NewRepoIndexerHandler(services.RepoIndexer),
-		MCP:          handlers.NewMCPHandler(services.MCPServer),
+		Health:       handler.NewHealthHandler(),
+		VectorSearch: handler.NewVectorSearchHandler(services.VectorSearch),
+		RepoIndexer:  handler.NewRepoIndexerHandler(services.RepoIndexer),
+		MCP:          handler.NewMCPHandler(services.MCPServer),
 	}
 
 	return &Server{

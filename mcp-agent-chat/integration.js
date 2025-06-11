@@ -131,50 +131,90 @@ server.tool(
   {
     query: z.string().describe('The search query'),
     repository: z.string().describe('The repository to search in'),
-    limit: z.number().optional().describe('Maximum number of results to return')
+    limit: z.number().optional().describe('Maximum number of results to return'),
+    repoUrl: z.string().optional().describe('The GitHub repository URL to index'),
+    branch: z.string().optional().describe('The branch to index (default: main)')
   },
-  async ({ query, repository, limit = 5 }) => {
-    try {
-      console.error('DEBUG - Vector search tool called with:', { query, repository, limit });
-      
-      // Call the Go server's vector search endpoint
-      const response = await axios.post(`${serverConfig.GO_SERVER_URL}/vector-search`, {
-        query,
-        repository,
-        limit
-      }, axiosConfig);
-
-      console.error('DEBUG - Vector search result status:', response.status);
-      
-      // Return the results
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response.data, null, 2),
-          },
-        ],
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('DEBUG - Vector search error:', errorMessage);
-      if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
-      }
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              status: 'error',
-              message: `Search failed: ${errorMessage}`
-            }, null, 2),
-          },
-        ],
-        isError: true,
-      };
+  async ({ query, repository, limit = 5, repoUrl, branch = 'main' }) => {
+    function hasResults(result) {
+      if (!result || result.isError) return false;
+      if (!result.content || !Array.isArray(result.content)) return false;
+      // Check if any content item has non-empty text and is not an error
+      return result.content.some(
+        (item) => item.type === 'text' && item.text && !item.text.includes('error') && item.text !== '{}' && item.text !== '[]'
+      );
     }
+    // 1st attempt
+    let result = await (async () => {
+      try {
+        const response = await axios.post(`${serverConfig.GO_SERVER_URL}/vector-search`, {
+          query,
+          repository,
+          limit
+        }, axiosConfig);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'error',
+                message: `Search failed: ${errorMessage}`
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+    })();
+    if (hasResults(result)) return result;
+    // 2nd attempt
+    result = await (async () => {
+      try {
+        const response = await axios.post(`${serverConfig.GO_SERVER_URL}/vector-search`, {
+          query,
+          repository,
+          limit
+        }, axiosConfig);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'error',
+                message: `Search failed: ${errorMessage}`
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+    })();
+    if (hasResults(result)) return result;
+    // If still no results, index the repository (if repoUrl is provided)
+    if (repoUrl) {
+      await server.tools.indexRepository({ repoUrl, branch });
+    }
+    return result;
   }
 );
 
@@ -294,7 +334,6 @@ app.post('/mcp', async (req, res) => {
     
     // Choose the correct endpoint based on the tool
     const endpoint = req.body.tool === 'indexRepository' ? '/index-repository' : '/vector-search';
-    
     const response = await fetch(`${serverConfig.GO_SERVER_URL}${endpoint}`, {
       method: 'POST',
       headers: {
@@ -325,4 +364,4 @@ app.post('/mcp', async (req, res) => {
       success: false
     });
   }
-}); 
+});

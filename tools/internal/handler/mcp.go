@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"encoding/json"
@@ -6,14 +6,14 @@ import (
 	"net/http"
 
 	"mcpserver/internal/models"
-	"mcpserver/internal/services"
+	"mcpserver/internal/service"
 )
 
 type MCPHandler struct {
-	service *services.MCPServerService
+	service *service.MCPServerService
 }
 
-func NewMCPHandler(service *services.MCPServerService) *MCPHandler {
+func NewMCPHandler(service *service.MCPServerService) *MCPHandler {
 	return &MCPHandler{
 		service: service,
 	}

@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"encoding/json"
@@ -6,14 +6,14 @@ import (
 	"net/http"
 
 	"mcpserver/internal/models"
-	"mcpserver/internal/services"
+	"mcpserver/internal/service"
 )
 
 type RepoIndexerHandler struct {
-	service *services.RepoIndexerService
+	service *service.RepoIndexerService
 }
 
-func NewRepoIndexerHandler(service *services.RepoIndexerService) *RepoIndexerHandler {
+func NewRepoIndexerHandler(service *service.RepoIndexerService) *RepoIndexerHandler {
 	return &RepoIndexerHandler{
 		service: service,
 	}

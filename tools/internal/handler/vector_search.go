@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"encoding/json"
@@ -6,14 +6,14 @@ import (
 	"net/http"
 
 	"mcpserver/internal/models"
-	"mcpserver/internal/services"
+	"mcpserver/internal/service"
 )
 
 type VectorSearchHandler struct {
-	service *services.VectorSearchService
+	service *service.VectorSearchService
 }
 
-func NewVectorSearchHandler(service *services.VectorSearchService) *VectorSearchHandler {
+func NewVectorSearchHandler(service *service.VectorSearchService) *VectorSearchHandler {
 	return &VectorSearchHandler{
 		service: service,
 	}

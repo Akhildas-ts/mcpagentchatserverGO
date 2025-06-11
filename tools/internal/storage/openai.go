@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+
+	"mcpserver/internal/models"
 
 	"github.com/sashabaranov/go-openai"
 )
@@ -44,17 +47,6 @@ func (oc *OpenAIClient) GetEmbedding(text string) ([]float32, error) {
 
 	return embedding, nil
 }
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"strings"
-
-	"mcpserver/internal/models"
-
-	"github.com/sashabaranov/go-openai"
-)
 
 func (oc *OpenAIClient) GenerateEnhancedSummary(chunks []map[string]interface{}, query string) (string, error) {
 	if oc.client == nil {
