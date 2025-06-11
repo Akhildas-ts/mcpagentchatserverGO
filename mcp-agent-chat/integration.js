@@ -86,7 +86,6 @@ async function processChat(message, repository = '', context = {}) {
     throw error;
   }
 }
-
 // Add chat tool that integrates with Go server
 server.tool(
   'chat',
@@ -189,7 +188,6 @@ server.tool(
   async ({ repoUrl, branch = 'main' }) => {
     try {
       console.error(`DEBUG - Indexing repository: ${repoUrl}, branch: ${branch}`);
-      
       // Call the Go server's repository indexing endpoint
       const response = await axios.post(`${serverConfig.GO_SERVER_URL}/index-repository`, {
         repoUrl,
@@ -197,7 +195,7 @@ server.tool(
       }, axiosConfig);
 
       console.error('DEBUG - Repository indexing result status:', response.status);
-      
+
       return {
         content: [
           {
@@ -280,7 +278,7 @@ app.post('/mcp', async (req, res) => {
     } else if (req.body.tool === 'indexRepository') {
       // Format for repository indexing
       goServerRequest = {
-        repository: req.body.params.repoUrl.replace('https://github.com/', ''),
+        repoUrl: req.body.params.repoUrl,
         branch: req.body.params.branch || 'main'
       };
     } else {

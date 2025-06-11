@@ -1,29 +1,23 @@
 {
   "name": "mcp-agent-chat",
   "version": "1.0.0",
-  "main": "server.js",
-  "type": "module",
+  "main": "index.js",
   "scripts": {
-    "start": "node integration.js",
-    "test": "node client.js",
-    "integration": "node integration.js",
-    "cursor-config": "node cursor-config.js",
-    "debug": "node debug.js"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
-  "keywords": [
-    "mcp",
-    "agent",
-    "chat"
-  ],
+  "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Agent Chat MCP Server using Model Context Protocol",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.7.0",
-    "axios": "^1.6.7",
-    "dotenv": "^16.4.7",
-    "zod": "^3.22.4",
-    "express": "^4.18.2",
-    "node-fetch": "^3.3.0"
-  }
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.25.61"
+  },
+  "devDependencies": {},
+  "description": "",
+  "type": "module"
 }
