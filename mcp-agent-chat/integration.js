@@ -58,19 +58,24 @@ if (serverConfig.MCP_SECRET_TOKEN) {
 async function processChat(message, repository = '', context = {}) {
   try {
     console.error(`DEBUG - Processing chat: "${message}" for repo: ${repository}`);
-    
     // First, search for relevant code using the Go server's vector search
     const searchResponse = await axios.post(`${serverConfig.GO_SERVER_URL}/vector-search`, {
       query: message,
       repository: repository,
       limit: 5
     }, axiosConfig);
-
     console.error('DEBUG - Search response status:', searchResponse.status);
-    
     // Format the chat response with the search results
     const searchResults = searchResponse.data.success ? searchResponse.data.data : [];
-    
+    // If no useful results, return a user-friendly fallback
+    if (!searchResults || (Array.isArray(searchResults) && searchResults.length === 0)) {
+      return {
+        message: "Sorry, I couldn't find a clear answer to your question in the repository documentation or code. Please try rephrasing your question or provide more details.",
+        repository: repository,
+        codeContext: [],
+        timestamp: new Date().toISOString()
+      };
+    }
     return {
       message: `I processed your message: "${message}"`,
       repository: repository,
@@ -83,7 +88,13 @@ async function processChat(message, repository = '', context = {}) {
       console.error('Response data:', error.response.data);
       console.error('Response status:', error.response.status);
     }
-    throw error;
+    // On error, also return a user-friendly fallback
+    return {
+      message: "Sorry, I couldn't find a clear answer to your question in the repository documentation or code. Please try rephrasing your question or provide more details.",
+      repository: repository,
+      codeContext: [],
+      timestamp: new Date().toISOString()
+    };
   }
 }
 // Add chat tool that integrates with Go server
